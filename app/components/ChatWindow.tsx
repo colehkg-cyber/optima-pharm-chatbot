@@ -16,14 +16,13 @@ export default function ChatWindow() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: '안녕하세요! 강남 루카831 옵티마 정약국의 정해성 약사입니다. 😊\n\n약사님이 공부하신 전문 자료를 기반으로 건강기능식품과 복약에 대해 상담해 드립니다. 궁금하신 점을 말씀해 주세요!',
+      content: '안녕하세요! 강남 루카831 옵티마 정약국의 정해성 약사입니다. 😊\n\n약사님이 공부하신 전문 자료를 기반으로 건강기능식품과 복약에 대해 상담해 드립니다. 무엇이든 물어보세요!',
     }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 스크롤 자동 내림
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -48,7 +47,10 @@ export default function ChatWindow() {
         body: JSON.stringify({ query: userQuery }),
       });
 
-      if (!response.ok) throw new Error('상담 중 오류가 발생했습니다.');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
+        throw new Error(errorData.error || '상담 중 오류가 발생했습니다.');
+      }
 
       const data = await response.json();
       
@@ -65,7 +67,7 @@ export default function ChatWindow() {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `죄송합니다. ${error.message}`,
+        content: `⚠️ 에러: ${error.message}\n\n서버 로그를 확인해 주세요.`,
       }]);
     } finally {
       setIsLoading(false);
@@ -73,26 +75,32 @@ export default function ChatWindow() {
   };
 
   return (
-    <div className="flex flex-col h-[85vh] w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-      {/* 헤더 */}
-      <div className="bg-green-700 text-white p-4 flex items-center justify-between">
-        <div className="flex items-center">
-          <span className="text-2xl mr-2">💊</span>
-          <div>
-            <h1 className="font-bold text-lg">옵티마 정약국 AI 상담실</h1>
-            <p className="text-[10px] opacity-80 text-green-100">약사님의 전문 지식을 기반으로 답변합니다</p>
-          </div>
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-[#abc1d1] shadow-2xl relative">
+      {/* 카카오톡 스타일 헤더 */}
+      <div className="bg-[#abc1d1] px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <button className="text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <h1 className="font-bold text-gray-800 tracking-tight">정해성 약사</h1>
         </div>
-        <div className="flex space-x-2">
-          <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-          <span className="text-xs font-medium text-green-100">Online</span>
+        <div className="flex gap-4">
+          <button className="text-gray-700"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
+          <button className="text-gray-700"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg></button>
+        </div>
+      </div>
+
+      {/* 날짜 표시 */}
+      <div className="flex justify-center my-4">
+        <div className="bg-black/10 rounded-full px-3 py-1 text-[10px] text-white">
+          2026년 4월 18일 토요일
         </div>
       </div>
 
       {/* 대화창 영역 */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/50"
+        className="flex-1 overflow-y-auto px-3 pb-24 space-y-2 custom-scrollbar"
       >
         {messages.map((msg) => (
           <ChatMessage 
@@ -113,32 +121,47 @@ export default function ChatWindow() {
       </div>
 
       {/* 입력창 영역 */}
-      <div className="p-4 bg-white border-t border-gray-100">
-        <form onSubmit={handleSubmit} className="relative flex items-center">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={isLoading}
-            placeholder="예: 당뇨약이랑 홍삼 같이 먹어도 되나요?"
-            className="w-full p-4 pr-16 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
-          />
+      <div className="p-3 bg-white fixed bottom-0 w-full max-w-md">
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          <button type="button" className="text-gray-400 p-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </button>
+          <div className="flex-1 bg-gray-100 rounded-2xl flex items-center px-3 py-2 border border-gray-200">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={isLoading}
+              placeholder="메시지를 입력하세요"
+              className="w-full bg-transparent text-sm focus:outline-none text-gray-800"
+            />
+            <button type="button" className="text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+            </button>
+          </div>
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className={`absolute right-2 p-2 px-4 rounded-lg font-bold transition-all ${
+            className={`p-2 rounded-lg font-bold transition-all ${
               !input.trim() || isLoading 
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                ? 'text-gray-300' 
+                : 'text-[#3c3c3e]'
             }`}
           >
-            {isLoading ? '...' : '전송'}
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={input.trim() ? "fill-[#fee500] stroke-none" : ""}><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           </button>
         </form>
-        <p className="text-[10px] text-gray-400 text-center mt-3">
-          정약국 AI는 약사님의 28권 강의자료를 바탕으로 답변하며, 최종 상담은 대면 상담을 권장합니다.
-        </p>
       </div>
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(0,0,0,0.1);
+          border-radius: 10px;
+        }
+      `}</style>
     </div>
   );
 }
