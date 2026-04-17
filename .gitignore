@@ -1,0 +1,41 @@
+# 깃허브에 올리면 안 되는 파일들
+# (비밀번호, API 키, 개인정보 등이 들어있는 파일)
+
+# 환경변수 파일 (API 키 보관)
+.env.local
+.env.*.local
+.env
+
+# 구글 서비스 계정 키 (절대 올리면 안 됨!)
+secrets/
+*.json
+!package.json
+!tsconfig.json
+
+# Node.js 패키지 (용량 큼)
+node_modules/
+.next/
+out/
+
+# Python 관련
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 원본 PDF 파일들 (용량 큼 + 약사님 자료 보안)
+data/raw/
+data/processed/
+
+# 맥OS 자동 생성 파일
+.DS_Store
+Thumbs.db
+
+# 로그 파일
+*.log
+npm-debug.log*
+
+# 에디터 설정
+.vscode/
+.idea/

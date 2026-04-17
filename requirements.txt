@@ -1,0 +1,17 @@
+# Python 패키지 목록
+# 설치 방법: pip install -r requirements.txt
+
+# PDF 처리 (이미지→텍스트 변환)
+google-cloud-documentai==2.20.0   # Google Document AI
+pymupdf==1.23.0                   # PDF 파일 열고 이미지 추출
+
+# 임베딩 (텍스트→숫자 변환)
+openai==1.12.0                    # 임베딩 생성 (text-embedding-3-small)
+anthropic==0.21.0                 # Claude API
+
+# 벡터 DB 저장
+supabase==2.3.0                   # Supabase DB 연결
+
+# 유틸리티
+python-dotenv==1.0.0              # .env 파일 읽기
+tqdm==4.66.0                      # 진행바 표시
