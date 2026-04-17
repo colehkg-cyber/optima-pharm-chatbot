@@ -4,110 +4,104 @@ import { anthropic, CHAT_MODEL } from '../../../lib/claude';
 import OpenAI from 'openai';
 
 export async function POST(req: NextRequest) {
-  console.log('--- Chat API Started ---');
   try {
-    const { query } = await req.json();
+    const { query, history = [], mode = 'general' } = await req.json();
 
     if (!query) {
       return NextResponse.json({ error: '질문을 입력해 주세요.' }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
-    }
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    console.log('Step 1: Embedding query...');
-    // 1. 사용자 질문을 임베딩(숫자 벡터)으로 변환
+    // 1. 사용자 질문을 임베딩
     const embeddingResponse = await openai.embeddings.create({
       model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
       input: query,
-    }).catch(e => {
-      console.error('OpenAI Embedding Error:', e);
-      throw new Error('임베딩 생성 중 오류가 발생했습니다: ' + e.message);
     });
-
     const embedding = embeddingResponse.data[0].embedding;
 
-    console.log('Step 2: Searching Supabase...');
     // 2. Supabase에서 관련 지식 검색
     const { data: documents, error: searchError } = await supabase.rpc('match_document_chunks', {
       query_embedding: embedding,
       match_count: 5,
-      min_similarity: 0.3, // 임계값을 낮춰서 결과가 나오게 유도
+      min_similarity: 0.2,
     });
 
-    if (searchError) {
-      console.error('Supabase RPC Error:', searchError);
-      throw new Error('지식베이스 검색 중 오류가 발생했습니다: ' + searchError.message);
+    if (searchError) throw new Error('검색 엔진 오류: ' + searchError.message);
+
+    // 3. 컨텍스트 생성
+    const contextText = documents && documents.length > 0 
+      ? documents.map((doc: any, i: number) => `[자료 ${i + 1}] (문서: ${doc.metadata.doc_name}, 페이지: ${doc.metadata.page_number})\n${doc.content}`).join('\n\n')
+      : "관련된 직접적인 자료를 찾지 못했습니다.";
+
+    // 4. 모드에 따른 지침 설정
+    let modeInstruction = "";
+    if (mode === 'recommend') {
+      modeInstruction = `
+[영양제 추천 모드 활성화]
+- 상담 마지막에 반드시 '옵티마(Optima)' 브랜드의 구체적인 영양제 제품명을 추천하며 마무리해라.
+- 제공된 자료(교안/책자)에 언급된 제품 위주로 추천하되, 증상에 가장 적합한 조합을 제시해라.
+- 추천 시에는 왜 이 제품이 필요한지 자료의 근거를 짧게 덧붙여라.
+- 나중에 자사몰에서 바로 구매할 수 있도록 안내하는 뉘앙스를 담아라.`;
+    } else {
+      modeInstruction = `
+[일반 상담 모드 활성화]
+- 약학적 지식 전달과 증상 상담에 집중해라.
+- 특정 제품 추천보다는 원리와 생활 습관, 주의사항 위주로 친절하게 설명해라.`;
     }
 
-    console.log(`Step 3: Found ${documents?.length || 0} docs`);
+    // 5. Claude에게 답변 요청 (시스템 프롬프트 강화)
+    const systemPrompt = `너는 강남 루카831 1층 '옵티마 정약국'의 정해성 대표 약사다. 
+20년 경력의 베테랑 약사로서, 환자와 1:1로 깊이 있게 상담하는 것이 너의 업무다.
 
-    // 3. 검색 결과가 아예 없는 경우 처리
-    if (!documents || documents.length === 0) {
-      return NextResponse.json({
-        answer: "죄송합니다. 현재 정약국 지식베이스에서 해당 질문에 대한 충분한 근거를 찾지 못했습니다. 보다 정확한 상담을 위해 약사님께 직접 문의해 주세요.",
-        sources: [],
-        safety_notice: "⚠️ 본 답변은 참고용이며, 정확한 복약 지도는 반드시 약사 또는 의사와 상담하시기 바랍니다.",
-        confidence: "none"
-      });
-    }
+[핵심 미션]
+- 너는 단순한 챗봇이 아니라, 정해성 약사 본인이다. 
+- 환자의 질문에 대해 제공된 [참고 자료]를 바탕으로 최대한 상세하고 전문적으로 답변해라.
+- **가장 중요**: AI 상담만으로도 충분히 도움을 받았다는 느낌이 들도록 정성을 다해라.
+- 자료에 특정 내용이 부족하더라도, 네가 가진 전문 지식을 활용해 '일반적인 약학적 관점'에서 조언을 곁들여라.
 
-    // 4. 컨텍스트 생성
-    const contextText = documents
-      .map((doc: any, i: number) => `[자료 ${i + 1}] (문서: ${doc.metadata.doc_name}, 페이지: ${doc.metadata.page_number})\n${doc.content}`)
-      .join('\n\n');
+${modeInstruction}
 
-    console.log('Step 4: Requesting Claude...');
-    // 5. Claude에게 답변 요청
-    const systemPrompt = `너는 강남 루카831 1층 '옵티마 정약국'의 정해성 대표 약사다.
-'장-간-뇌 순환' 원칙과 체질 분석 기반으로 건강 및 영양제 상담을 진행하는 20년 경력의 전문가다.
-
-[지침]
-1. 반드시 아래 제공된 [참고 자료]의 내용만을 근거로 답변해라.
-2. 자료에 없는 내용을 물어보면 절대 지어내지 말고 "자료에서 충분한 근거를 찾지 못했다"라고 답해라.
-3. 말투는 50~60대 여성 고객이 편안함을 느낄 수 있도록 친절하고 정중하게 존댓말을 써라. 카카오톡 대화처럼 친근하게 답해라.
-4. 답변은 과장하지 말고 객관적으로 전달해라.
+[답변 스타일]
+- 50~60대 여성 고객이 편안함을 느끼도록 아주 친근하고 다정하게 존댓말을 써라. 
+- 카카오톡 대화처럼 부드러운 말투를 사용해라 (예: "~하시군요 ^^", "~하시면 참 좋아요").
+- 답변은 마크다운(Markdown) 형식을 적극 활용해라. (강조는 **굵게**, 리스트는 - 사용)
 
 [참고 자료]
 ${contextText}`;
 
+    // 이전 대화 맥락 포함
+    const chatMessages = history.slice(-6).map((msg: any) => ({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    }));
+    
+    chatMessages.push({ role: 'user', content: query });
+
     const message = await anthropic.messages.create({
       model: CHAT_MODEL,
-      max_tokens: 1024,
+      max_tokens: 1500,
       system: systemPrompt,
-      messages: [{ role: 'user', content: query }],
-    }).catch(e => {
-      console.error('Anthropic API Error:', e);
-      throw new Error('Claude 답변 생성 중 오류가 발생했습니다: ' + e.message);
+      messages: chatMessages,
     });
 
     const answer = message.content[0].type === 'text' ? message.content[0].text : '';
 
-    console.log('API Finished successfully');
-
     // 6. 최종 응답
     return NextResponse.json({
       answer,
-      sources: documents.map((doc: any) => ({
+      sources: documents ? documents.map((doc: any) => ({
         doc_name: doc.metadata.doc_name,
         page_number: doc.metadata.page_number,
         section_title: doc.metadata.section_title || "일반",
         snippet: doc.content.substring(0, 150) + "..."
-      })),
-      safety_notice: "⚠️ 본 답변은 참고용이며, 최종 복약 결정은 반드시 담당 약사 또는 의사의 판단을 따르시기 바랍니다.",
-      confidence: documents[0].similarity > 0.7 ? "high" : "medium"
+      })) : [],
+      safety_notice: "⚠️ 본 답변은 약사님의 지식 베이스를 바탕으로 한 참고용 정보이며, 최종적인 복약 결정은 반드시 전문가와 상의하시기 바랍니다.",
+      confidence: (documents && documents.length > 0 && documents[0].similarity > 0.6) ? "high" : "medium"
     });
 
   } catch (error: any) {
-    console.error('Critical API Error:', error);
-    return NextResponse.json({ 
-      error: error.message,
-      detail: "서버 터미널 로그를 확인해 주세요." 
-    }, { status: 500 });
+    console.error('API Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
