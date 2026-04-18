@@ -39,3 +39,4 @@ npm-debug.log*
 # 에디터 설정
 .vscode/
 .idea/
+.vercel

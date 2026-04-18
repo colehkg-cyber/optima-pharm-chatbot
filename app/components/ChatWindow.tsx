@@ -9,6 +9,7 @@ interface Message {
   sources?: any[];
   safety_notice?: string;
   id: string;
+  isLoading?: boolean;
 }
 
 type ChatMode = 'general' | 'recommend';
@@ -22,16 +23,16 @@ export default function ChatWindow() {
     }
   ]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<ChatMode>('general');
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // 스크롤 자동 내림
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages]);
 
   // 텍스트 영역 높이 조절
   useEffect(() => {
@@ -43,25 +44,37 @@ export default function ChatWindow() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
     const userQuery = input.trim();
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: userQuery };
-    
-    const history = messages.map(m => ({ role: m.role, content: m.content }));
-    
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
+    if (!userQuery) return;
 
+    // 1. 사용자 메시지 추가 및 입력창 초기화
+    const userMessageId = Date.now().toString();
+    const assistantMessageId = (Date.now() + 1).toString();
+    
+    const userMessage: Message = { id: userMessageId, role: 'user', content: userQuery };
+    const loadingMessage: Message = { id: assistantMessageId, role: 'assistant', content: '', isLoading: true };
+    
+    // 현재까지의 대화 기록 (API 전송용)
+    const historySnapshot = messages
+      .filter(m => !m.isLoading)
+      .map(m => ({ role: m.role, content: m.content }));
+
+    setMessages(prev => [...prev, userMessage, loadingMessage]);
+    setInput('');
+
+    // 2. 비동기로 API 호출 (기다리지 않음)
+    processMessage(userQuery, historySnapshot, assistantMessageId);
+  };
+
+  const processMessage = async (query: string, history: any[], targetId: string) => {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          query: userQuery,
-          history: history,
-          mode: mode // 상담 모드 전송
+          query,
+          history,
+          mode
         }),
       });
 
@@ -72,27 +85,33 @@ export default function ChatWindow() {
 
       const data = await response.json();
       
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.answer,
-        sources: data.sources,
-        safety_notice: data.safety_notice
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
+      // 3. 해당 대기 메시지 업데이트
+      setMessages(prev => prev.map(msg => 
+        msg.id === targetId 
+          ? { 
+              ...msg, 
+              content: data.answer, 
+              sources: data.sources, 
+              safety_notice: data.safety_notice, 
+              isLoading: false 
+            } 
+          : msg
+      ));
     } catch (error: any) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `⚠️ 에러: ${error.message}`,
-      }]);
-    } finally {
-      setIsLoading(false);
+      setMessages(prev => prev.map(msg => 
+        msg.id === targetId 
+          ? { 
+              ...msg, 
+              content: `⚠️ 에러: ${error.message}`, 
+              isLoading: false 
+            } 
+          : msg
+      ));
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Enter는 전송, Shift + Enter는 줄바꿈
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -115,7 +134,6 @@ export default function ChatWindow() {
           </div>
         </div>
         
-        {/* 모드 전환 버튼 */}
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setMode(mode === 'general' ? 'recommend' : 'general')}
@@ -151,15 +169,9 @@ export default function ChatWindow() {
             content={msg.content}
             sources={msg.sources}
             safety_notice={msg.safety_notice}
+            isLoading={msg.isLoading}
           />
         ))}
-        {isLoading && (
-          <ChatMessage 
-            role="assistant"
-            content=""
-            isLoading={true}
-          />
-        )}
       </div>
 
       {/* 입력창 영역 */}
@@ -175,16 +187,15 @@ export default function ChatWindow() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isLoading}
               placeholder="메시지를 입력하세요 (Shift+Enter 줄바꿈)"
               className="w-full bg-transparent text-[14px] focus:outline-none text-gray-800 py-1 resize-none max-h-[120px]"
             />
           </div>
           <button
             onClick={() => handleSubmit()}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim()}
             className={`p-1.5 mb-1 transition-all ${
-              !input.trim() || isLoading 
+              !input.trim() 
                 ? 'text-gray-300' 
                 : 'text-[#3c3c3e]'
             }`}
