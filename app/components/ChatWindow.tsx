@@ -118,9 +118,10 @@ export default function ChatWindow() {
       handleSubmit();
     } else if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
-      const start = e.currentTarget.selectionStart;
-      const end = e.currentTarget.selectionEnd;
-      const value = e.currentTarget.value;
+      const target = e.currentTarget as HTMLTextAreaElement;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const value = target.value;
       setInput(value.substring(0, start) + "\n" + value.substring(end));
       // 커서 위치 조절은 리액트 상태 업데이트 후 다음 틱에서 필요할 수 있음
     }
