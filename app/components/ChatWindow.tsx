@@ -20,7 +20,7 @@ export default function ChatWindow() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: '안녕하세요! 강남 루카831 옵티마 정약국의 정해성 약사입니다. 😊\n\n약사님이 공부하신 전문 자료를 기반으로 1:1 상담을 도와드립니다. 무엇이든 편하게 물어보세요!',
+      content: '옵티마 정약국 정해성 약사입니다. 😊\n\n어떤 게 불편해서 오셨나요? 어떤 건강 관련 고민이나 불편함이 있으신가요?',
     }
   ]);
   const [input, setInput] = useState('');
@@ -111,6 +111,8 @@ export default function ChatWindow() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Enter는 전송, Shift + Enter는 줄바꿈
+    // 사용자가 'shiftab' (Shift+Tab)을 언급했으므로 그것도 줄바꿈으로 처리
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -120,6 +122,7 @@ export default function ChatWindow() {
       const end = e.currentTarget.selectionEnd;
       const value = e.currentTarget.value;
       setInput(value.substring(0, start) + "\n" + value.substring(end));
+      // 커서 위치 조절은 리액트 상태 업데이트 후 다음 틱에서 필요할 수 있음
     }
   };
 
@@ -150,6 +153,9 @@ export default function ChatWindow() {
             }`}
           >
             {mode === 'recommend' ? '💊 추천 모드' : '💬 상담 모드'}
+          </button>
+          <button className="text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
           </button>
         </div>
       </div>
