@@ -199,7 +199,7 @@ export default function ChatWindow() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="메시지를 입력하세요"
-              className="w-full bg-transparent text-[15px] focus:outline-none text-gray-800 py-0.5 resize-none max-h-[120px] leading-tight"
+              className="w-full bg-transparent text-[16px] focus:outline-none text-gray-800 py-0.5 resize-none max-h-[120px] leading-tight"
             />
           </div>
           <button
