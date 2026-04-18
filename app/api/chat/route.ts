@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     // 2. Supabase에서 관련 지식 검색
     const { data: documents, error: searchError } = await supabase.rpc('match_document_chunks', {
       query_embedding: embedding,
-      match_count: 8, // 컨텍스트를 좀 더 넉넉히 가져옴
+      match_count: 8,
       min_similarity: 0.2,
     });
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       ? documents.map((doc: any, i: number) => `[자료 ${i + 1}] (문서: ${doc.metadata.doc_name}, 페이지: ${doc.metadata.page_number})\n${doc.content}`).join('\n\n')
       : "관련된 직접적인 자료를 찾지 못했습니다.";
 
-    // 4. 모드에 따른 지침 설정 (더욱 강력하게 수정)
+    // 4. 모드에 따른 지침 설정
     let modeInstruction = "";
     if (mode === 'recommend') {
       modeInstruction = `
@@ -42,31 +42,35 @@ export async function POST(req: NextRequest) {
 - 상담의 마무리 단계에서 **반드시** '옵티마(Optima)' 브랜드의 구체적인 영양제 제품을 추천하세요.
 - 자료에 언급된 제품(예: 리버렉스, 큐어맥스, 청호정골드, 정음단, 유니몬, 에스린, 프로큐, 리셀 등) 중에서 증상에 맞는 것을 골라 추천하세요.
 - "이런 증상에는 옵티마의 **[제품명]**이 도움이 될 수 있습니다"라고 명확히 언급하세요.
-- 왜 이 제품을 추천하는지 자료의 근거(성분이나 효능)를 짧게 설명하세요.
 - 상담을 "구매하시려면 자사몰을 이용하시거나 약국으로 문의주세요"라는 뉘앙스로 마무리하세요.`;
     } else {
       modeInstruction = `
 [일반 상담 모드: 활성화]
-- 특정 제품 판매보다는 원리 설명과 증상 상담, 생활 습관 조언에 집중하세요.
-- 제품 추천이 필요한 경우에도 브랜드명보다는 성분 위주로 설명하세요.`;
+- 특정 제품 판매보다는 원리 설명과 증상 상담, 생활 습관 조언에 집중하세요.`;
     }
 
-    // 5. Claude에게 답변 요청
+    // 5. Claude에게 답변 요청 (관련 질문 생성을 위해 응답 형식에 대한 지시 추가)
     const systemPrompt = `너는 강남 루카831 1층 '옵티마 정약국'의 정해성 대표 약사다. 
-20년 경력의 베테랑 약사로서, 환자와 1:1로 카톡 상담을 하는 상황이다.
+20년 경력의 베테랑 약사로서 환자와 1:1로 카톡 상담을 한다.
 
 [상담 원칙]
-- 너는 정해성 약사 본인이다. 말투는 아주 다정하고 친절하며 전문적이어야 한다 (~하시군요 ^^, ~해보세요 등).
-- **절대로 답변을 회피하지 마라.** "약국에 오세요"는 정말 위급한 상황이 아니면 하지 마라. 여기서 모든 답을 준다는 마음으로 임해라.
-- 제공된 [참고 자료]를 최우선으로 하되, 자료에 없는 일반적인 약학 상식도 약사로서 조언해줄 수 있다.
+- 너는 정해성 약사 본인이다. 말투는 아주 다정하고 친절하며 전문적이어야 한다 (~하시군요 ^^).
+- **절대로 답변을 회피하지 마라.** 
 - 답변은 마크다운(Markdown) 형식을 사용하여 읽기 좋게 구성해라.
+- 답변이 끝난 후, 사용자가 궁금해할 법한 **연관 질문 3개**를 생성해라.
+
+[응답 형식]
+반드시 아래와 같은 JSON 구조로만 응답해라:
+{
+  "answer": "마크다운을 포함한 약사님의 다정한 답변 내용",
+  "related_questions": ["질문1", "질문2", "질문3"]
+}
 
 ${modeInstruction}
 
 [참고 자료]
 ${contextText}`;
 
-    // 최근 대화 맥락 포함
     const chatMessages = history.slice(-6).map((msg: any) => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: msg.content
@@ -76,15 +80,25 @@ ${contextText}`;
 
     const message = await anthropic.messages.create({
       model: CHAT_MODEL,
-      max_tokens: 1500,
+      max_tokens: 2000,
       system: systemPrompt,
       messages: chatMessages,
     });
 
-    const answer = message.content[0].type === 'text' ? message.content[0].text : '';
+    const rawContent = message.content[0].type === 'text' ? message.content[0].text : '';
+    
+    // JSON 파싱 (AI가 가끔 마크다운 태그를 붙이는 경우 대비)
+    let parsedResponse;
+    try {
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      parsedResponse = jsonMatch ? JSON.parse(jsonMatch[0]) : { answer: rawContent, related_questions: [] };
+    } catch (e) {
+      parsedResponse = { answer: rawContent, related_questions: [] };
+    }
 
     return NextResponse.json({
-      answer,
+      answer: parsedResponse.answer,
+      related_questions: parsedResponse.related_questions,
       sources: documents ? documents.map((doc: any) => ({
         doc_name: doc.metadata.doc_name,
         page_number: doc.metadata.page_number,
@@ -92,7 +106,6 @@ ${contextText}`;
         snippet: doc.content.substring(0, 150) + "..."
       })) : [],
       safety_notice: "⚠️ 본 답변은 약사님의 지식 베이스를 바탕으로 한 참고용 정보이며, 최종적인 복약 결정은 반드시 전문가와 상의하시기 바랍니다.",
-      confidence: (documents && documents.length > 0 && documents[0].similarity > 0.6) ? "high" : "medium"
     });
 
   } catch (error: any) {

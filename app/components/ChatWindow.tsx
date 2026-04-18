@@ -7,6 +7,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: any[];
+  related_questions?: string[];
   safety_notice?: string;
   id: string;
   isLoading?: boolean;
@@ -42,9 +43,9 @@ export default function ChatWindow() {
     }
   }, [input]);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
-    const userQuery = input.trim();
+    const userQuery = customQuery || input.trim();
     if (!userQuery) return;
 
     // 1. 사용자 메시지 추가 및 입력창 초기화
@@ -59,7 +60,7 @@ export default function ChatWindow() {
       .map(m => ({ role: m.role, content: m.content }));
 
     setMessages(prev => [...prev, userMessage, loadingMessage]);
-    setInput('');
+    if (!customQuery) setInput('');
 
     // 2. 비동기로 API 호출
     processMessage(userQuery, historySnapshot, assistantMessageId);
@@ -90,6 +91,7 @@ export default function ChatWindow() {
               ...msg, 
               content: data.answer, 
               sources: data.sources, 
+              related_questions: data.related_questions,
               safety_notice: data.safety_notice, 
               isLoading: false 
             } 
@@ -109,8 +111,6 @@ export default function ChatWindow() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Enter는 전송, Shift + Enter는 줄바꿈
-    // 사용자가 'shiftab' (Shift+Tab)을 언급했으므로 그것도 줄바꿈으로 처리
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -120,7 +120,6 @@ export default function ChatWindow() {
       const end = e.currentTarget.selectionEnd;
       const value = e.currentTarget.value;
       setInput(value.substring(0, start) + "\n" + value.substring(end));
-      // 커서 위치 조절은 리액트 상태 업데이트 후 다음 틱에서 필요할 수 있음
     }
   };
 
@@ -141,7 +140,6 @@ export default function ChatWindow() {
           </div>
         </div>
         
-        {/* 모드 전환 버튼 */}
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setMode(mode === 'general' ? 'recommend' : 'general')}
@@ -173,8 +171,10 @@ export default function ChatWindow() {
             role={msg.role}
             content={msg.content}
             sources={msg.sources}
+            related_questions={msg.related_questions}
             safety_notice={msg.safety_notice}
             isLoading={msg.isLoading}
+            onQuestionClick={(q) => handleSubmit(undefined, q)}
           />
         ))}
       </div>

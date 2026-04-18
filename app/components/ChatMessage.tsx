@@ -15,17 +15,27 @@ interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
+  related_questions?: string[];
   safety_notice?: string;
   isLoading?: boolean;
+  onQuestionClick?: (question: string) => void;
 }
 
-export default function ChatMessage({ role, content, sources, safety_notice, isLoading }: ChatMessageProps) {
+export default function ChatMessage({ 
+  role, 
+  content, 
+  sources, 
+  related_questions, 
+  safety_notice, 
+  isLoading,
+  onQuestionClick 
+}: ChatMessageProps) {
   const isUser = role === 'user';
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
 
   return (
     <div className={`flex w-full mb-5 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[90%] md:max-w-[80%]`}>
+      <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[92%] md:max-w-[85%]`}>
         {/* 프로필 및 이름 (상대방일 때만) */}
         {!isUser && (
           <div className="flex items-center mb-1 ml-1">
@@ -38,7 +48,7 @@ export default function ChatMessage({ role, content, sources, safety_notice, isL
         
         <div className={`flex items-end gap-1.5 ${isUser ? 'flex-row' : 'flex-row-reverse'}`}>
           {/* 말풍선 */}
-          <div className={`relative rounded-2xl px-3 py-2 text-[14px] shadow-sm leading-relaxed ${
+          <div className={`relative rounded-2xl px-3 py-2.5 text-[14px] shadow-sm leading-relaxed ${
             isUser 
               ? 'bg-[#fee500] text-[#3c3c3e] rounded-tr-none' 
               : 'bg-white text-[#1a1a1a] rounded-tl-none border border-gray-100'
@@ -65,15 +75,29 @@ export default function ChatMessage({ role, content, sources, safety_notice, isL
               </div>
             )}
           </div>
-          {!isLoading && <span className="text-[10px] text-gray-500 mb-0.5 whitespace-nowrap opacity-60">오후 2:30</span>}
         </div>
+
+        {/* 연관 질문 (AI 답변인 경우에만 표시) */}
+        {!isUser && !isLoading && related_questions && related_questions.length > 0 && (
+          <div className="mt-3 ml-1 flex flex-wrap gap-2 animate-in fade-in slide-in-from-left-2 duration-500 delay-300">
+            {related_questions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => onQuestionClick?.(q)}
+                className="px-3 py-1.5 bg-white/70 border border-blue-100 rounded-full text-[11px] text-blue-600 hover:bg-blue-50 transition-all shadow-sm font-medium"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 출처 버튼 (Perplexity 스타일 토글) */}
         {!isUser && sources && sources.length > 0 && (
-          <div className="mt-2 ml-1">
+          <div className="mt-3 ml-1">
             <button 
               onClick={() => setIsSourcesOpen(!isSourcesOpen)}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-white/40 border border-gray-200/50 rounded-full text-[10px] text-gray-600 hover:bg-white transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-white/40 border border-gray-200/50 rounded-full text-[10px] text-gray-500 hover:bg-white transition-all shadow-sm"
             >
               <span className="opacity-70">📑</span>
               <span className="font-bold">약사님 지식 근거 {sources.length}개</span>
@@ -90,7 +114,7 @@ export default function ChatMessage({ role, content, sources, safety_notice, isL
             {isSourcesOpen && (
               <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-300">
                 {sources.map((source, idx) => (
-                  <div key={idx} className="bg-white/95 border border-gray-200/50 rounded-xl p-2.5 shadow-sm max-w-[280px]">
+                  <div key={idx} className="bg-white/95 border border-gray-100 rounded-xl p-2.5 shadow-sm max-w-[280px]">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[10px] font-extrabold text-green-900 truncate flex-1">{source.doc_name}</span>
                       <span className="text-[9px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded ml-2 font-black italic">p.{source.page_number}</span>
@@ -107,7 +131,7 @@ export default function ChatMessage({ role, content, sources, safety_notice, isL
 
         {/* 안전 문구 */}
         {!isUser && safety_notice && !isLoading && (
-          <div className="mt-3 ml-1 text-[9px] text-gray-400 leading-tight max-w-[250px] italic">
+          <div className="mt-4 ml-1 text-[9px] text-gray-400 leading-tight max-w-[250px] italic">
             {safety_notice}
           </div>
         )}
